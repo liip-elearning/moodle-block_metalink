@@ -25,6 +25,7 @@
  */
 
 require_once($CFG->dirroot.'/enrol/meta/locallib.php');
+require_once($CFG->libdir.'/csvlib.class.php');
 
 /**
  * Validates and processes files for the metalink block
@@ -54,15 +55,22 @@ class block_metalink_handler {
      * If not, assume it's an uploaded file and open it using the File API.
      * Return the file handler.
      *
+     * @param bool filehandle: Return a file handle if true, the file _content_ if false
      * @throws metalink_exception if the file can't be opened for reading
      * @global object $USER
      * @return object File handler
      */
-    public function open_file() {
+    public function open_file($filehandle = true) {
         global $USER;
         if (is_file($this->filename)) {
-            if (!$file = fopen($this->filename, 'r')) {
-                throw new metalink_exception('cantreadcsv', '', 500);
+            if ($filehandle) {
+                if (!$file = fopen($this->filename, 'r')) {
+                    throw new metalink_exception('cantreadcsv', '', 500);
+                }
+            } else {
+                if (!$file = file_get_contents($this->filename)) {
+                    throw new metalink_exception('cantreadcsv', '', 500);
+                }
             }
         } else {
             $fs = get_file_storage();
@@ -77,8 +85,14 @@ class block_metalink_handler {
                 throw new metalink_exception('cantreadcsv', '', 500);
             }
             $file = reset($files);
-            if (!$file = $file->get_content_file_handle()) {
-                throw new metalink_exception('cantreadcsv', '', 500);
+            if ($filehandle) {
+                if (!$file = $file->get_content_file_handle()) {
+                    throw new metalink_exception('cantreadcsv', '', 500);
+                }
+            } else {
+                if (!$file = $file->get_content()) {
+                    throw new metalink_exception('cantreadcsv', '', 500);
+                }
             }
         }
         return $file;
