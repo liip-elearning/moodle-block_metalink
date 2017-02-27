@@ -108,18 +108,27 @@ class block_metalink_handler {
      * @return true on success
      */
     public function validate() {
-        $line = 0;
-        $file = $this->open_file();
-        while ($csvrow = fgetcsv($file)) {
-            $line++;
-            if (count($csvrow) < 3) {
-                throw new metalink_exception('toofewcols', $line, 415);
-            }
-            if (count($csvrow) > 3) {
-                throw new metalink_exception('toomanycols', $line, 415);
+        $content = $this->open_file(false);
+
+        $iid = csv_import_reader::get_new_iid('metalink');
+        $cir = new csv_import_reader($iid, 'metalink');
+
+        $successful_read = false;
+        foreach (csv_import_reader::get_delimiter_list() as $longname => $delimiter) {
+            $readcount = $cir->load_csv_content($content, 'utf-8', $longname);
+            $csvloaderror = $cir->get_error();
+            $columns = $cir->get_columns();
+            if (count($columns) == 3 ||
+                (count($columns) == 4 && $columns[3] == '')
+                ) {
+                $successful_read = true;
+                break;
             }
         }
-        fclose($file);
+        unset($readcount);
+        if (!$successful_read) {
+            throw new metalink_exception('wrongcols', null, 415);
+        }
         return true;
     }
 
@@ -150,14 +159,33 @@ class block_metalink_handler {
             $nl = '<br />';
         }
 
+        $content = $this->open_file(false);
+
+        $iid = csv_import_reader::get_new_iid('metalink');
+        $cir = new csv_import_reader($iid, 'metalink');
+
+        $successful_read = false;
+        foreach (csv_import_reader::get_delimiter_list() as $longname => $delimiter) {
+            $readcount = $cir->load_csv_content($content, 'utf-8', $longname);
+            $csvloaderror = $cir->get_error();
+            $columns = $cir->get_columns();
+            if (count($columns) == 3 ||
+                (count($columns) == 4 && $columns[3] == '')
+                ) {
+                $successful_read = true;
+                break;
+            }
+        }
+        unset($readcount);
+        if (!$successful_read) {
+            throw new metalink_exception('cantreadcsv', null, 500);
+        }
         // Set a counter so we can report line numbers for errors.
         $line = 0;
 
-        // Open the file.
-        $file = $this->open_file();
-
+        $cir->init();
         // Loop through each row of the file.
-        while ($csvrow = fgetcsv($file)) {
+        while ($csvrow = $cir->next()) {
             $line++;
             // Clean idnumbers to prevent sql injection.
             $op = clean_param($csvrow[0], PARAM_ALPHANUM);
@@ -230,7 +258,7 @@ class block_metalink_handler {
                 }
             }
         }
-        fclose($file);
+        $cir->close();
         return implode($nl, $report);
     }
 }
